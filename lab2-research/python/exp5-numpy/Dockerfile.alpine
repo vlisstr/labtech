@@ -1,0 +1,16 @@
+FROM python:3.13-alpine
+
+WORKDIR /app
+
+COPY requirements.txt ./
+
+RUN apk add --no-cache --virtual .build-deps \
+        build-base gfortran openblas-dev \
+ && pip install --no-cache-dir -r requirements.txt \
+ && apk del .build-deps
+
+COPY spaceship/ ./spaceship/
+COPY build/    ./build/
+
+EXPOSE 8000
+CMD ["uvicorn", "spaceship.app:app", "--host", "0.0.0.0", "--port", "8000"]
