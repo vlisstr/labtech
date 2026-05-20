@@ -1,0 +1,46 @@
+---
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Remove default nginx site (if present)
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Install mywebapp nginx site from template
+  ansible.builtin.template:
+    src: mywebapp.conf.j2
+    dest: /etc/nginx/sites-available/mywebapp
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload nginx
+
+- name: Enable mywebapp nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/mywebapp
+    dest: /etc/nginx/sites-enabled/mywebapp
+    state: link
+  notify: Reload nginx
+
+- name: Allow {{ nginx_listen_port }}/tcp on the worker via UFW
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ nginx_listen_port }}"
+
+- name: Enable UFW with default deny policy
+  community.general.ufw:
+    state: enabled
+    policy: deny
+
+- name: Ensure nginx is enabled and started
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true

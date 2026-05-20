@@ -1,0 +1,55 @@
+---
+- name: Install MariaDB and the Python client used by Ansible mysql modules
+  ansible.builtin.apt:
+    name:
+      - mariadb-server
+      - python3-pymysql
+    state: present
+    update_cache: true
+
+- name: Configure MariaDB to listen on the VM's IP (not just localhost)
+  ansible.builtin.template:
+    src: 99-mywebapp.cnf.j2
+    dest: /etc/mysql/mariadb.conf.d/99-mywebapp.cnf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart mariadb
+
+- name: Ensure MariaDB is enabled and started
+  ansible.builtin.systemd:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Run any pending handlers so MariaDB is bound to the new IP
+  ansible.builtin.meta: flush_handlers
+
+- name: Allow {{ db_port }}/tcp only from the worker VM
+  community.general.ufw:
+    rule: allow
+    proto: tcp
+    port: "{{ db_port }}"
+    src: "{{ hostvars[groups['workers'][0]].ansible_default_ipv4.address }}"
+
+- name: Enable UFW with default deny policy
+  community.general.ufw:
+    state: enabled
+    policy: deny
+
+- name: Create application database
+  community.mysql.mysql_db:
+    name: "{{ db_name }}"
+    state: present
+    encoding: utf8mb4
+    collation: utf8mb4_unicode_ci
+    login_unix_socket: /run/mysqld/mysqld.sock
+
+- name: Create application DB user, granting access only from the worker IP
+  community.mysql.mysql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    host: "{{ hostvars[groups['workers'][0]].ansible_default_ipv4.address }}"
+    priv: "{{ db_name }}.*:ALL"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock

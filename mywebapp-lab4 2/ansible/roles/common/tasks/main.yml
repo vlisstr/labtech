@@ -1,0 +1,35 @@
+---
+- name: Ensure base packages are present
+  ansible.builtin.apt:
+    name:
+      - curl
+      - sudo
+      - ufw
+      - python3-apt
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure teacher user exists with sudo (password required)
+  ansible.builtin.user:
+    name: teacher
+    shell: /bin/bash
+    groups: sudo
+    append: true
+    state: present
+    password: "{{ '12345678' | password_hash('sha512') }}"
+    update_password: on_create
+
+- name: Grant teacher sudo with password (explicit, not relying on group)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/teacher
+    content: "teacher ALL=(ALL) ALL\n"
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+- name: Permit SSH through UFW
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH

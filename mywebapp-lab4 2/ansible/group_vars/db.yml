@@ -1,0 +1,3 @@
+---
+# bind MariaDB on the VM's primary IP so the worker can reach it.
+db_bind_address: "{{ ansible_default_ipv4.address }}"

@@ -1,0 +1,45 @@
+---
+# =============================================================================
+# Master playbook for Lab #4.
+#
+# Run after `terraform apply` has provisioned the two VMs and written the
+# inventory.ini:
+#
+#     ansible-playbook playbook.yml
+#
+# All tasks are idempotent — re-running the playbook should be a no-op.
+# =============================================================================
+
+# 1) Wait until both VMs are reachable by SSH.
+- name: Wait for SSH connectivity on all hosts
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH to come up
+      ansible.builtin.wait_for_connection:
+        timeout: 180
+
+    - name: Gather facts now that the host is reachable
+      ansible.builtin.setup:
+
+# 2) Common configuration on every VM (teacher user, base packages).
+- name: Common configuration
+  hosts: all
+  become: true
+  roles:
+    - common
+
+# 3) Database VM — MariaDB bound to the VM's IP, accessible only from worker.
+- name: Database server
+  hosts: db
+  become: true
+  roles:
+    - db
+
+# 4) Worker VM — application user, Node.js app, nginx, operator user.
+- name: Worker (app + nginx)
+  hosts: workers
+  become: true
+  roles:
+    - worker_app
+    - worker_nginx

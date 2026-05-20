@@ -1,0 +1,12 @@
+---
+# Variant N = 26 → V2=1 (CLI args, MariaDB), V3=3 (Inventory), V5=2 (port 5200)
+n_value: 26
+
+app_user:     app
+app_dir:      /opt/mywebapp
+app_port:     5200
+
+db_name:      mywebapp
+db_user:      mywebapp
+db_password:  mywebapp_dev_pass     # in real life: ansible-vault or env
+db_port:      3306

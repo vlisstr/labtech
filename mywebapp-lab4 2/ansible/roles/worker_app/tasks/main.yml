@@ -1,0 +1,126 @@
+---
+- name: Install Node.js and npm
+  ansible.builtin.apt:
+    name:
+      - nodejs
+      - npm
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create system user for the application
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ app_dir }}"
+    create_home: false
+
+- name: Create application directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: '0755'
+
+- name: Copy application code
+  ansible.builtin.copy:
+    src: app/
+    dest: "{{ app_dir }}/"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: preserve
+  notify: Restart mywebapp
+
+- name: Install npm dependencies (production only)
+  community.general.npm:
+    path: "{{ app_dir }}"
+    production: true
+    state: present
+  become: true
+  become_user: "{{ app_user }}"
+  notify: Restart mywebapp
+
+- name: Install systemd unit from template
+  ansible.builtin.template:
+    src: mywebapp.service.j2
+    dest: /etc/systemd/system/mywebapp.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload systemd
+    - Restart mywebapp
+
+- name: Apply DB schema migrations (idempotent — script uses CREATE IF NOT EXISTS)
+  ansible.builtin.command:
+    cmd: >-
+      /usr/bin/node {{ app_dir }}/migrate.js
+      --db-host {{ db_host }}
+      --db-port {{ db_port }}
+      --db-user {{ db_user }}
+      --db-password {{ db_password }}
+      --db-name {{ db_name }}
+  become: true
+  become_user: "{{ app_user }}"
+  register: migrate_result
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: migrate_result.rc == 0
+
+- name: Flush handlers so systemd reloads before we start the service
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start mywebapp
+  ansible.builtin.systemd:
+    name: mywebapp
+    enabled: true
+    state: started
+
+- name: Create operator user
+  ansible.builtin.user:
+    name: operator
+    shell: /bin/bash
+    state: present
+    password: "{{ '12345678' | password_hash('sha512') }}"
+    update_password: on_create
+
+- name: Sudoers entry for operator (limited, no password)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/operator
+    content: |
+      # operator may only manage mywebapp.service and reload nginx
+      Cmnd_Alias MYWEBAPP_CTL = \
+          /usr/bin/systemctl start mywebapp.service, \
+          /usr/bin/systemctl stop mywebapp.service, \
+          /usr/bin/systemctl restart mywebapp.service, \
+          /usr/bin/systemctl status mywebapp.service
+      Cmnd_Alias NGINX_CTL = \
+          /usr/bin/systemctl reload nginx.service, \
+          /usr/bin/systemctl reload nginx
+      operator ALL=(root) NOPASSWD: MYWEBAPP_CTL, NGINX_CTL
+    owner: root
+    group: root
+    mode: '0440'
+    validate: 'visudo -cf %s'
+
+# Per the spec: /home/student/gradebook with N inside.
+# No 'student' user exists in Lab 4 — directory is owned by root, file is
+# world-readable so teacher (or anyone else) can read it.
+- name: Ensure /home/student exists for gradebook
+  ansible.builtin.file:
+    path: /home/student
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Write gradebook file
+  ansible.builtin.copy:
+    dest: /home/student/gradebook
+    content: "{{ n_value }}\n"
+    owner: root
+    group: root
+    mode: '0644'

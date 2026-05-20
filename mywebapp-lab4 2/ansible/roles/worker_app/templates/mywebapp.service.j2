@@ -1,0 +1,29 @@
+[Unit]
+Description=mywebapp - Simple Inventory (Lab #4)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+Group={{ app_user }}
+WorkingDirectory={{ app_dir }}
+ExecStart=/usr/bin/node {{ app_dir }}/server.js \
+    --host 127.0.0.1 \
+    --port {{ app_port }} \
+    --db-host {{ db_host }} \
+    --db-port {{ db_port }} \
+    --db-user {{ db_user }} \
+    --db-password {{ db_password }} \
+    --db-name {{ db_name }}
+
+Restart=on-failure
+RestartSec=2
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

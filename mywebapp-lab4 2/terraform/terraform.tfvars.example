@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and fill in your own values:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# Then run:
+#   terraform init
+#   terraform apply
+
+ssh_public_key = "ssh-ed25519 AAAA... your@host"
+
+# Optional overrides:
+# libvirt_uri      = "qemu:///system"
+# libvirt_network  = "default"
+# vm_memory        = 1024
+# vm_vcpu          = 1

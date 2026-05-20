@@ -1,0 +1,5 @@
+---
+# Resolved at runtime — IP of the (single) db host in the inventory.
+db_host: "{{ hostvars[groups['db'][0]].ansible_default_ipv4.address }}"
+
+nginx_listen_port: 80
