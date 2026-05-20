@@ -1,0 +1,84 @@
+# Docker Compose stack for mywebapp.
+#
+# Spec requirements satisfied:
+#   * three services (db, app, nginx) on a dedicated bridge network
+#     (NOT the default network);
+#   * MariaDB data lives in a named volume — survives container removal,
+#     `docker compose down`, Docker engine restart, host reboot.
+#
+# Usage:
+#   docker compose up -d --build      — bring everything up
+#   docker compose ps                 — see status
+#   docker compose logs -f app        — follow app logs
+#   docker compose down               — stop, keep DB volume
+#   docker compose down -v            — stop AND wipe DB volume
+
+services:
+  db:
+    image: mariadb:10.11
+    container_name: mywebapp-db
+    restart: unless-stopped
+    networks: [mywebapp_net]
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpass}
+      MARIADB_DATABASE:      mywebapp
+      MARIADB_USER:          mywebapp
+      MARIADB_PASSWORD:      ${DB_PASSWORD:-mywebapp_dev_pass}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test:     ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 --silent"]
+      interval: 5s
+      timeout:  3s
+      retries:  20
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mywebapp-app:latest
+    container_name: mywebapp-app
+    restart: unless-stopped
+    networks: [mywebapp_net]
+    depends_on:
+      db:
+        condition: service_healthy
+    # CLI args (V2 = 1 → configuration via command-line arguments).
+    # `db` here is the docker-compose service DNS name resolved inside the
+    # mywebapp_net network.
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "5200"
+      - "--db-host"
+      - "db"
+      - "--db-port"
+      - "3306"
+      - "--db-user"
+      - "mywebapp"
+      - "--db-password"
+      - "${DB_PASSWORD:-mywebapp_dev_pass}"
+      - "--db-name"
+      - "mywebapp"
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mywebapp-nginx
+    restart: unless-stopped
+    networks: [mywebapp_net]
+    depends_on: [app]
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+networks:
+  mywebapp_net:
+    name: mywebapp_net
+    driver: bridge
+
+volumes:
+  db_data:
+    name: mywebapp_db_data
